@@ -1,0 +1,29 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# Database dumps / local data
+*.dump
+*.archive
+*.sqlite
+*.db
+
+# Keys
+*.pem
+*.key
+*.cert
+
+# System
+.DS_Store

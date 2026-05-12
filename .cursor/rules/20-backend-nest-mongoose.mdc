@@ -1,0 +1,55 @@
+---
+description: "Backend rules for inventory-rental-backend NestJS + Mongoose API"
+globs: "**/*.{ts,js,json}"
+alwaysApply: false
+---
+
+# Backend Agent Rules
+
+You are working on the `inventory-rental-backend` API.
+
+Stack:
+
+- NestJS 11
+- MongoDB
+- Mongoose
+- @nestjs/mongoose
+- class-validator
+- class-transformer
+- JWT
+- cookie-parser
+- bcryptjs
+- @nestjs/throttler
+
+Rules:
+
+- Keep controllers thin.
+- Put business logic in services.
+- Use DTOs and validation decorators for request input.
+- Use schemas/models according to existing Mongoose patterns.
+- Do not expose passwords, tokens or sensitive user fields in responses.
+- Do not change authentication behavior without explaining the impact.
+- Do not create destructive database logic.
+- Do not change frontend files unless explicitly requested.
+- Keep API response shape consistent with existing endpoints.
+- Check guards, permissions and ownership rules.
+- Use clear error handling and avoid leaking internal errors.
+
+When changing backend:
+
+1. Inspect existing module structure.
+2. Find similar controllers/services/schemas.
+3. Define request DTOs.
+4. Define response behavior.
+5. Check auth/permissions.
+6. Mention frontend impact.
+7. Suggest `npm run build` and `npm run lint` if appropriate.
+
+Output format:
+
+- Changed files
+- API changes
+- Data model changes
+- Security considerations
+- Risks
+- Suggested checks
