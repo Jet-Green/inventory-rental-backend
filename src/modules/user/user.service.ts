@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
@@ -44,9 +44,6 @@ export class UserService {
       email: payload.email.toLowerCase().trim(),
       password: payload.password,
       phone: payload.phone.trim(),
-      status: "person",
-      isLessorVerified: false,
-      lessorVerificationStatus: "not_requested",
       isRenterVerified: true,
       isBlocked: false,
       roles: isAdmin ? ["renter", "admin"] : ["renter"],
@@ -55,62 +52,39 @@ export class UserService {
 
   async updateProfileById(userId: string, payload: UpdateProfileDto): Promise<UserDocument> {
     return (await this.userModel
-      .findByIdAndUpdate(userId, { $set: payload }, { new: true })
+      .findByIdAndUpdate(userId, { $set: payload }, { returnDocument: "after" })
       .exec()) as UserDocument;
   }
 
-  async requestLessorVerificationById(userId: string): Promise<UserDocument> {
+  /**
+   * После одобрения организации: роль `business`, убираем устаревший `lessor`.
+   * Нельзя в одном update сочетать $addToSet и $pull по одному полю `roles` — конфликт в MongoDB.
+   */
+  async grantBusinessRoleById(userId: string): Promise<UserDocument> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+    const nextRoles = new Set(
+      user.roles.filter((r) => r !== "lessor"),
+    );
+    nextRoles.add("business");
     return (await this.userModel
       .findByIdAndUpdate(
         userId,
-        {
-          $set: {
-            lessorVerificationStatus: "pending",
-            lessorVerificationComment: "",
-          },
-        },
-        { new: true },
+        { $set: { roles: [...nextRoles] } },
+        { returnDocument: "after" },
       )
       .exec()) as UserDocument;
   }
 
-  async approveLessorVerificationById(
-    userId: string,
-    comment?: string,
-  ): Promise<UserDocument> {
+  /** После отклонения заявки организации. */
+  async revokeBusinessRoleById(userId: string): Promise<UserDocument> {
     return (await this.userModel
       .findByIdAndUpdate(
         userId,
-        {
-          $set: {
-            isLessorVerified: true,
-            lessorVerificationStatus: "approved",
-            lessorVerificationComment: comment || "",
-          },
-          $addToSet: { roles: "lessor" },
-        },
-        { new: true },
-      )
-      .exec()) as UserDocument;
-  }
-
-  async rejectLessorVerificationById(
-    userId: string,
-    comment?: string,
-  ): Promise<UserDocument> {
-    return (await this.userModel
-      .findByIdAndUpdate(
-        userId,
-        {
-          $set: {
-            isLessorVerified: false,
-            lessorVerificationStatus: "rejected",
-            lessorVerificationComment:
-              comment || "Заявка отклонена администратором",
-          },
-          $pull: { roles: "lessor" },
-        },
-        { new: true },
+        { $pullAll: { roles: ["business", "lessor"] } },
+        { returnDocument: "after" },
       )
       .exec()) as UserDocument;
   }
@@ -120,12 +94,12 @@ export class UserService {
       .findByIdAndUpdate(
         userId,
         { $set: { isRenterVerified: true }, $addToSet: { roles: "renter" } },
-        { new: true },
+        { returnDocument: "after" },
       )
       .exec()) as UserDocument;
   }
 
-  hasRole(user: UserDocument | null, role: "renter" | "lessor" | "admin"): boolean {
+  hasRole(user: UserDocument | null, role: "renter" | "business" | "admin"): boolean {
     if (!user) return false;
     return Array.isArray(user.roles) && user.roles.includes(role);
   }
@@ -134,10 +108,4 @@ export class UserService {
     return this.userModel.find({}).sort({ createdAt: -1 }).exec();
   }
 
-  async getLessorVerificationRequests(): Promise<UserDocument[]> {
-    return this.userModel
-      .find({ lessorVerificationStatus: { $in: ["pending", "rejected"] } })
-      .sort({ updatedAt: -1 })
-      .exec();
-  }
 }

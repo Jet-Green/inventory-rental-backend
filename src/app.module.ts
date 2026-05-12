@@ -6,6 +6,7 @@ import { AdminModule } from "./modules/admin/admin.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BookingModule } from "./modules/booking/booking.module";
 import { CategoryModule } from "./modules/category/category.module";
+import { OrganizationModule } from "./modules/organization/organization.module";
 import { RentalListingModule } from "./modules/rental-listing/rental-listing.module";
 import { UserModule } from "./modules/user/user.module";
 
@@ -30,6 +31,7 @@ import { UserModule } from "./modules/user/user.module";
     ),
     AuthModule,
     UserModule,
+    OrganizationModule,
     CategoryModule,
     RentalListingModule,
     BookingModule,

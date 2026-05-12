@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, MinLength } from "class-validator";
+import { IsEmail, IsOptional, IsString, MinLength } from "class-validator";
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -7,30 +7,12 @@ export class UpdateProfileDto {
   fullName?: string;
 
   @IsEmail()
+  @IsOptional()
   email?: string;
 
   @IsString()
+  @IsOptional()
   phone?: string;
-
-  @IsOptional()
-  @IsIn(["person", "ip", "ooo"])
-  status?: "person" | "ip" | "ooo";
-
-  @IsOptional()
-  @IsString()
-  companyName?: string;
-
-  @IsOptional()
-  @IsString()
-  inn?: string;
-
-  @IsOptional()
-  @IsString()
-  ogrnOrOgrnip?: string;
-
-  @IsOptional()
-  @IsString()
-  payoutPhone?: string;
 
   @IsOptional()
   @IsString()

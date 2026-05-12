@@ -7,6 +7,8 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { SubmitOrganizationVerificationDto } from "../organization/dto/submit-organization-verification.dto";
+import { OrganizationService } from "../organization/organization.service";
 import { TokenService } from "../token/token.service";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { UserService } from "./user.service";
@@ -16,6 +18,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly tokenService: TokenService,
+    private readonly organizationService: OrganizationService,
   ) {}
 
   private async getCurrentUser(req: Request) {
@@ -41,16 +44,6 @@ export class UserController {
     return { user };
   }
 
-  @Post("verify-lessor")
-  async verifyLessor(@Req() req: Request) {
-    const currentUser = await this.getCurrentUser(req);
-    if (!currentUser) throw new UnauthorizedException("Требуется авторизация");
-    const user = await this.userService.requestLessorVerificationById(
-      currentUser._id.toString(),
-    );
-    return { user };
-  }
-
   @Post("verify-renter")
   async verifyRenter(@Req() req: Request) {
     const currentUser = await this.getCurrentUser(req);
@@ -59,6 +52,31 @@ export class UserController {
       currentUser._id.toString(),
     );
     return { user };
+  }
+
+  /** Дубликат `GET /organization/mine` — удобно за прокси, где стабильно открыт только `/user/*`. */
+  @Get("my-organization")
+  async myOrganization(@Req() req: Request) {
+    const currentUser = await this.getCurrentUser(req);
+    if (!currentUser) throw new UnauthorizedException("Требуется авторизация");
+    const organization = await this.organizationService.findMine(
+      currentUser._id.toString(),
+    );
+    return { organization };
+  }
+
+  /** Дубликат `POST /organization/submit-verification`. */
+  @Post("submit-organization-verification")
+  async submitOrganizationVerification(
+    @Req() req: Request,
+    @Body() dto: SubmitOrganizationVerificationDto,
+  ) {
+    const currentUser = await this.getCurrentUser(req);
+    if (!currentUser) throw new UnauthorizedException("Требуется авторизация");
+    return this.organizationService.submitVerification(
+      currentUser._id.toString(),
+      dto,
+    );
   }
 
   @Get("all")

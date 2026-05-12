@@ -1,8 +1,8 @@
 import { IsOptional, IsString } from "class-validator";
 
-export class LessorVerificationDecisionDto {
+export class OrganizationDecisionDto {
   @IsString()
-  userId: string;
+  organizationId: string;
 
   @IsOptional()
   @IsString()

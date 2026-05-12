@@ -96,7 +96,7 @@ export class RentalListingService {
       .findByIdAndUpdate(
         payload.listingId,
         { $set: { moderationStatus: payload.status } },
-        { new: true },
+        { returnDocument: "after" },
       )
       .exec();
   }

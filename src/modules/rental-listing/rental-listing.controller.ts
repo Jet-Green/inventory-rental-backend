@@ -31,7 +31,11 @@ export class RentalListingController {
   async create(@Req() req: Request, @Body() payload: CreateListingDto) {
     const user = await this.authService.requireUserFromRequest(req);
     const roles = user.roles || [];
-    if (!roles.includes("lessor") && !roles.includes("admin")) {
+    if (
+      !roles.includes("business") &&
+      !roles.includes("lessor") &&
+      !roles.includes("admin")
+    ) {
       throw new ForbiddenException("Только арендодатель может создавать объявления");
     }
     const listing = await this.rentalListingService.create(user._id.toString(), payload);
