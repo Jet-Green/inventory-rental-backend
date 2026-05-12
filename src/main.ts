@@ -6,8 +6,15 @@ import { AppModule } from "./app.module";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: [process.env.CLIENT_URL || "https://rent.firetechno.ru"],
+    origin: allowedOrigins.length
+      ? allowedOrigins
+      : ["http://localhost:3068", "https://rent.firetechno.ru"],
     credentials: true,
   });
   app.use(cookieParser());
