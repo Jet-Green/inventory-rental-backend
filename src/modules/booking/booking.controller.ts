@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   ForbiddenException,
   Req,
@@ -33,5 +34,11 @@ export class BookingController {
     const user = await this.authService.requireUserFromRequest(req);
     const bookings = await this.bookingService.getMyBookings(user._id.toString());
     return { bookings };
+  }
+
+  @Get("busy/:listingId")
+  async busyByListing(@Param("listingId") listingId: string) {
+    const busyRanges = await this.bookingService.getBusyRangesByListingId(listingId);
+    return { busyRanges };
   }
 }

@@ -45,6 +45,7 @@ export class ListingsPublicController {
     @Query("priceTo") priceTo?: string,
     @Query("pickupMethod") pickupMethod?: "self_pickup" | "delivery",
     @Query("unitsNeeded") unitsNeeded?: string,
+    @Query("sortBy") sortBy?: "priceAsc" | "priceDesc",
   ) {
     const categories =
       categorySlugs === undefined
@@ -69,6 +70,7 @@ export class ListingsPublicController {
         priceTo: priceTo ? Number(priceTo) : undefined,
         pickupType,
         unitsNeeded: unitsNeeded ? Number(unitsNeeded) : undefined,
+        sortBy,
       },
     });
 

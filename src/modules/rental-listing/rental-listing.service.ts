@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model, Types } from "mongoose";
+import { Model, type SortOrder, Types } from "mongoose";
 import {
   CatalogFiltersDto,
   CatalogRequestDto,
@@ -50,9 +50,15 @@ export class RentalListingService {
     const limit = Math.min(48, Math.max(1, Number(payload.limit) || 12));
     const skip = (page - 1) * limit;
     const query = this.buildCatalogQuery(payload.filters);
+    const sort: Record<string, SortOrder> =
+      payload.filters?.sortBy === "priceAsc"
+        ? { pricePerDay: 1 as SortOrder, createdAt: -1 as SortOrder }
+        : payload.filters?.sortBy === "priceDesc"
+          ? { pricePerDay: -1 as SortOrder, createdAt: -1 as SortOrder }
+          : { createdAt: -1 as SortOrder };
 
     const [data, total] = await Promise.all([
-      this.rentalListingModel.find(query).skip(skip).limit(limit).sort({ createdAt: -1 }).exec(),
+      this.rentalListingModel.find(query).skip(skip).limit(limit).sort(sort).exec(),
       this.rentalListingModel.countDocuments(query),
     ]);
 

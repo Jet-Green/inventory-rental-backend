@@ -44,6 +44,10 @@ export class CatalogFiltersDto {
   @IsOptional()
   @IsIn(["pickup", "delivery", "both"])
   pickupType?: "pickup" | "delivery" | "both";
+
+  @IsOptional()
+  @IsIn(["priceAsc", "priceDesc"])
+  sortBy?: "priceAsc" | "priceDesc";
 }
 
 export class CatalogRequestDto {

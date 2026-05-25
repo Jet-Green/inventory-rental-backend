@@ -1,8 +1,7 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument } from "mongoose";
 
-/** `lessor` — только в старых документах БД, в коде используем `business`. */
-export type UserRole = "renter" | "business" | "admin" | "lessor";
+export type UserRole = "renter" | "business" | "admin";
 
 @Schema({ timestamps: true, collection: "users" })
 export class User {
@@ -30,29 +29,13 @@ export class User {
   @Prop({ default: false })
   isBlocked: boolean;
 
-  /** Без жёсткого enum в Mongo — допускаем миграцию со старым значением `lessor`. */
-  @Prop({ type: [String], default: ["renter"] })
+  @Prop({
+    type: [String],
+    enum: ["renter", "business", "admin"],
+    default: ["renter"],
+  })
   roles: UserRole[];
 }
 
 export type UserDocument = HydratedDocument<User>;
 export const UserSchema = SchemaFactory.createForClass(User);
-
-UserSchema.set("toJSON", {
-  transform(_doc, ret) {
-    const plain = ret as unknown as Record<string, unknown>;
-    for (const k of [
-      "isLessorVerified",
-      "lessorVerificationStatus",
-      "lessorVerificationComment",
-      "status",
-      "inn",
-      "ogrnOrOgrnip",
-      "companyName",
-      "payoutPhone",
-    ]) {
-      delete plain[k];
-    }
-    return ret;
-  },
-});

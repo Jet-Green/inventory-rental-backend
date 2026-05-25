@@ -56,37 +56,34 @@ export class UserService {
       .exec()) as UserDocument;
   }
 
-  /**
-   * После одобрения организации: роль `business`, убираем устаревший `lessor`.
-   * Нельзя в одном update сочетать $addToSet и $pull по одному полю `roles` — конфликт в MongoDB.
-   */
+  /** После одобрения организации. */
   async grantBusinessRoleById(userId: string): Promise<UserDocument> {
-    const user = await this.userModel.findById(userId).exec();
-    if (!user) {
-      throw new NotFoundException("Пользователь не найден");
-    }
-    const nextRoles = new Set(
-      user.roles.filter((r) => r !== "lessor"),
-    );
-    nextRoles.add("business");
-    return (await this.userModel
+    const updated = await this.userModel
       .findByIdAndUpdate(
         userId,
-        { $set: { roles: [...nextRoles] } },
+        { $addToSet: { roles: "business" } },
         { returnDocument: "after" },
       )
-      .exec()) as UserDocument;
+      .exec();
+    if (!updated) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+    return updated;
   }
 
   /** После отклонения заявки организации. */
   async revokeBusinessRoleById(userId: string): Promise<UserDocument> {
-    return (await this.userModel
+    const updated = await this.userModel
       .findByIdAndUpdate(
         userId,
-        { $pullAll: { roles: ["business", "lessor"] } },
+        { $pull: { roles: "business" } },
         { returnDocument: "after" },
       )
-      .exec()) as UserDocument;
+      .exec();
+    if (!updated) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+    return updated;
   }
 
   async verifyRenterById(userId: string): Promise<UserDocument> {
