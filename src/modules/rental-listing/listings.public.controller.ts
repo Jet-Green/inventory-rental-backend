@@ -25,7 +25,7 @@ function toPickupMethods(
 }
 
 function toPublicStatus(
-  moderationStatus: "active" | "pending" | "rejected" | "hidden",
+  moderationStatus: "draft" | "active" | "pending" | "rejected" | "hidden",
 ): ListingCardDto["status"] {
   if (moderationStatus === "pending") return "moderation";
   return moderationStatus;

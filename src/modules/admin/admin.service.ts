@@ -39,4 +39,27 @@ export class AdminService {
       totalPages: 1,
     };
   }
+
+  /** Пользователи с агрегатами (кол-во объявлений/броней) и фильтрами. */
+  async getUsersWithAggregates(filters: {
+    role?: "renter" | "business" | "admin";
+    verification?: "pending" | "approved" | "rejected" | "none";
+  }) {
+    return this.userService.getAdminUserList(filters);
+  }
+
+  /** Блокировка/разблокировка пользователя. */
+  async setUserBlocked(userId: string, isBlocked: boolean) {
+    const user = await this.userService.setBlocked(userId, isBlocked);
+    // Не утекаем пароль/служебные поля наружу.
+    return {
+      id: user._id.toString(),
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone,
+      roles: user.roles,
+      isBlocked: user.isBlocked,
+      isRenterVerified: user.isRenterVerified,
+    };
+  }
 }

@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { AuthModule } from "../auth/auth.module";
+import { Booking, BookingSchema } from "../booking/schemas/booking.schema";
 import { ListingsPublicController } from "./listings.public.controller";
 import { RentalListingController } from "./rental-listing.controller";
 import { RentalListingService } from "./rental-listing.service";
@@ -16,6 +17,10 @@ import {
       {
         name: RentalListing.name,
         schema: RentalListingSchema,
+      },
+      {
+        name: Booking.name,
+        schema: BookingSchema,
       },
     ]),
   ],

@@ -26,6 +26,8 @@ export class CategoriesPublicController {
       id: c._id.toString(),
       title: c.name,
       slug: c.key,
+      icon: c.icon,
+      sortOrder: c.order,
       isActive: Boolean(c.isVisible),
     }));
 

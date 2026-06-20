@@ -6,18 +6,12 @@ import {
   MinLength,
 } from "class-validator";
 
-export class CreateCategoryDto {
-  @IsString()
-  @MinLength(2)
-  key: string;
-
-  @IsString()
-  @MinLength(2)
-  name: string;
-
+/** Частичное обновление категории (админ). */
+export class UpdateCategoryDto {
   @IsOptional()
-  @IsBoolean()
-  isVisible?: boolean;
+  @IsString()
+  @MinLength(2)
+  name?: string;
 
   @IsOptional()
   @IsString()
@@ -26,4 +20,8 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsInt()
   order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
 }

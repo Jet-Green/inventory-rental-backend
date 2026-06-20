@@ -52,10 +52,14 @@ export class RentalListing {
 
   @Prop({
     required: true,
-    enum: ["active", "pending", "rejected", "hidden"],
+    enum: ["draft", "active", "pending", "rejected", "hidden"],
     default: "pending",
   })
-  moderationStatus: "active" | "pending" | "rejected" | "hidden";
+  moderationStatus: "draft" | "active" | "pending" | "rejected" | "hidden";
+
+  /** Причина отклонения при модерации (заполняется при status=rejected). */
+  @Prop()
+  rejectionReason?: string;
 
   @Prop({ required: true, type: Types.ObjectId, ref: "User", autopopulate: true })
   ownerId: Types.ObjectId;

@@ -11,6 +11,14 @@ export class Category {
 
   @Prop({ default: true })
   isVisible: boolean;
+
+  /** Идентификатор/URL иконки категории (опционально). */
+  @Prop()
+  icon?: string;
+
+  /** Порядок сортировки в каталоге (меньше — выше). */
+  @Prop({ default: 0 })
+  order: number;
 }
 
 export type CategoryDocument = HydratedDocument<Category>;

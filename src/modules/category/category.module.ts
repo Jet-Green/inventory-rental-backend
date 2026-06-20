@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
+import { AuthModule } from "../auth/auth.module";
 import { CategoryController } from "./category.controller";
 import { CategoriesPublicController } from "./categories.public.controller";
 import { CategoryService } from "./category.service";
@@ -7,6 +8,7 @@ import { Category, CategorySchema } from "./schemas/category.schema";
 
 @Module({
   imports: [
+    AuthModule,
     MongooseModule.forFeature([
       {
         name: Category.name,

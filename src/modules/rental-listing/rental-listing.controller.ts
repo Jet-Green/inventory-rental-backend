@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   NotFoundException,
   Param,
+  Patch,
   Post,
   ForbiddenException,
   Req,
@@ -12,6 +14,8 @@ import type { Request } from "express";
 import { AuthService } from "../auth/auth.service";
 import { CatalogRequestDto } from "./dto/catalog.dto";
 import { CreateListingDto } from "./dto/create-listing.dto";
+import { SetVisibilityDto } from "./dto/set-visibility.dto";
+import { UpdateListingDto } from "./dto/update-listing.dto";
 import { UpdateModerationDto } from "./dto/update-moderation.dto";
 import { RentalListingService } from "./rental-listing.service";
 
@@ -53,6 +57,56 @@ export class RentalListingController {
     }
     const listing = await this.rentalListingService.updateModeration(payload);
     return { listing };
+  }
+
+  /** Отправить черновик/отклонённое объявление на модерацию (владелец). */
+  @Post(":id/submit-moderation")
+  async submitModeration(@Req() req: Request, @Param("id") id: string) {
+    const user = await this.authService.requireUserFromRequest(req);
+    const listing = await this.rentalListingService.submitForModeration(
+      id,
+      user._id.toString(),
+    );
+    return { listing };
+  }
+
+  /** Редактировать своё объявление (владелец). Правка опубликованного → на модерацию. */
+  @Patch(":id")
+  async update(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() payload: UpdateListingDto,
+  ) {
+    const user = await this.authService.requireUserFromRequest(req);
+    const listing = await this.rentalListingService.updateOwned(
+      id,
+      user._id.toString(),
+      payload,
+    );
+    return { listing };
+  }
+
+  /** Скрыть/показать своё объявление (владелец). */
+  @Post(":id/visibility")
+  async setVisibility(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() payload: SetVisibilityDto,
+  ) {
+    const user = await this.authService.requireUserFromRequest(req);
+    const listing = await this.rentalListingService.setVisibilityOwned(
+      id,
+      user._id.toString(),
+      payload.hidden,
+    );
+    return { listing };
+  }
+
+  /** Удалить своё объявление (владелец). */
+  @Delete(":id")
+  async remove(@Req() req: Request, @Param("id") id: string) {
+    const user = await this.authService.requireUserFromRequest(req);
+    return this.rentalListingService.removeOwned(id, user._id.toString());
   }
 
   @Get(":id")

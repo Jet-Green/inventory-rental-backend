@@ -105,4 +105,121 @@ export class UserService {
     return this.userModel.find({}).sort({ createdAt: -1 }).exec();
   }
 
+  /** Блокировка/разблокировка пользователя (админ). */
+  async setBlocked(userId: string, isBlocked: boolean): Promise<UserDocument> {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException("Пользователь не найден");
+    }
+    const updated = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $set: { isBlocked } },
+        { returnDocument: "after" },
+      )
+      .exec();
+    if (!updated) throw new NotFoundException("Пользователь не найден");
+    return updated;
+  }
+
+  /**
+   * Список пользователей для админки с фильтрами и агрегатами.
+   * verification — статус верификации через organization.moderationStatus.
+   */
+  async getAdminUserList(filters: {
+    role?: "renter" | "business" | "admin";
+    verification?: "pending" | "approved" | "rejected" | "none";
+  }): Promise<
+    Array<{
+      id: string;
+      fullName: string;
+      email: string;
+      phone: string;
+      roles: string[];
+      isBlocked: boolean;
+      isRenterVerified: boolean;
+      organizationStatus: "pending" | "approved" | "rejected" | "none";
+      listingsCount: number;
+      bookingsCount: number;
+      createdAt?: Date;
+    }>
+  > {
+    const userMatch: Record<string, any> = {};
+    if (filters.role) userMatch.roles = filters.role;
+
+    const pipeline: any[] = [
+      { $match: userMatch },
+      // Кол-во объявлений пользователя.
+      {
+        $lookup: {
+          from: "rental_listings",
+          localField: "_id",
+          foreignField: "ownerId",
+          as: "listingsArr",
+        },
+      },
+      // Кол-во броней пользователя (как арендатора).
+      {
+        $lookup: {
+          from: "bookings",
+          localField: "_id",
+          foreignField: "renterId",
+          as: "bookingsArr",
+        },
+      },
+      // Статус верификации организации.
+      {
+        $lookup: {
+          from: "organizations",
+          localField: "_id",
+          foreignField: "orgManagers",
+          as: "orgArr",
+        },
+      },
+      {
+        $addFields: {
+          listingsCount: { $size: "$listingsArr" },
+          bookingsCount: { $size: "$bookingsArr" },
+          organizationStatus: {
+            $ifNull: [{ $arrayElemAt: ["$orgArr.moderationStatus", 0] }, "none"],
+          },
+        },
+      },
+      {
+        $project: {
+          fullName: 1,
+          email: 1,
+          phone: 1,
+          roles: 1,
+          isBlocked: 1,
+          isRenterVerified: 1,
+          organizationStatus: 1,
+          listingsCount: 1,
+          bookingsCount: 1,
+          createdAt: 1,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ];
+
+    if (filters.verification) {
+      pipeline.push({
+        $match: { organizationStatus: filters.verification },
+      });
+    }
+
+    const rows = await this.userModel.aggregate(pipeline).exec();
+    return rows.map((r: any) => ({
+      id: r._id.toString(),
+      fullName: r.fullName,
+      email: r.email,
+      phone: r.phone,
+      roles: r.roles || [],
+      isBlocked: Boolean(r.isBlocked),
+      isRenterVerified: Boolean(r.isRenterVerified),
+      organizationStatus: r.organizationStatus,
+      listingsCount: r.listingsCount || 0,
+      bookingsCount: r.bookingsCount || 0,
+      createdAt: r.createdAt,
+    }));
+  }
 }

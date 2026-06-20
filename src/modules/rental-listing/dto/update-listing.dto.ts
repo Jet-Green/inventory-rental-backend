@@ -1,6 +1,5 @@
 import {
   IsArray,
-  IsBoolean,
   IsIn,
   IsNumber,
   IsOptional,
@@ -17,37 +16,46 @@ class AvailabilityDto {
   to: string;
 }
 
-export class CreateListingDto {
+/** Частичное обновление объявления владельцем. Все поля опциональны. */
+export class UpdateListingDto {
+  @IsOptional()
   @IsString()
   @MaxLength(140)
-  title: string;
+  title?: string;
 
+  @IsOptional()
   @IsString()
   @MaxLength(3000)
-  description: string;
+  description?: string;
 
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  categories: string[];
+  categories?: string[];
 
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  photos: string[];
+  photos?: string[];
 
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  pricePerDay: number;
+  pricePerDay?: number;
 
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  minDays: number;
+  minDays?: number;
 
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  unitsTotal: number;
+  unitsTotal?: number;
 
+  @IsOptional()
   @IsIn(["pickup", "delivery", "both"])
-  pickupType: "pickup" | "delivery" | "both";
+  pickupType?: "pickup" | "delivery" | "both";
 
   @IsOptional()
   @IsString()
@@ -60,9 +68,4 @@ export class CreateListingDto {
   @IsOptional()
   @IsArray()
   calendar?: AvailabilityDto[];
-
-  /** Сохранить как черновик (без отправки на модерацию). */
-  @IsOptional()
-  @IsBoolean()
-  asDraft?: boolean;
 }

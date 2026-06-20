@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# uploaded files (local storage fallback)
+/uploads
+
 # Logs
 logs
 *.log
