@@ -38,6 +38,17 @@ export class BookingController {
     return { bookings };
   }
 
+  /** Последние брони по всей платформе (только админ) — для дашборда. */
+  @Get("admin/recent")
+  async adminRecent(@Req() req: Request) {
+    const user = await this.authService.requireUserFromRequest(req);
+    if (!user.roles?.includes("admin")) {
+      throw new ForbiddenException("Только администратор");
+    }
+    const bookings = await this.bookingService.getRecentBookings(8);
+    return { bookings };
+  }
+
   /** Брони по объявлениям текущего арендодателя. */
   @Get("owner")
   async owner(@Req() req: Request) {

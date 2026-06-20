@@ -310,6 +310,15 @@ export class BookingService {
       .exec();
   }
 
+  /** Последние брони по всей платформе (для дашборда админа). */
+  async getRecentBookings(limit = 8): Promise<BookingDocument[]> {
+    return this.bookingModel
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec();
+  }
+
   private async getBookingOrThrow(bookingId: string): Promise<BookingDocument> {
     if (!Types.ObjectId.isValid(bookingId)) {
       throw new NotFoundException("Бронь не найдена");
