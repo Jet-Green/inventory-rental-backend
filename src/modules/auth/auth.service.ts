@@ -50,6 +50,77 @@ export class AuthService {
     return { user: publicUser, ...tokens };
   }
 
+  /**
+   * Вход через «Города и Веси» (SSO, Вариант A — «проксируемый логин»).
+   * Наш сервер сам обращается к их /auth/login, сопоставляет пользователя
+   * и выдаёт НАШИ токены. Их секреты/токены нам не нужны.
+   *
+   * У «Города и Веси» нет OAuth-сервера, поэтому вход идёт по email+паролю
+   * их аккаунта. Требования на их стороне: whitelist нашего серверного IP
+   * (у них rate-limit 5 попыток/15 мин на IP) и наш домен в CORS allow-list.
+   */
+  async gorodaivesiLogin(payload: LoginDto) {
+    const baseUrl = (
+      process.env.GORODAIVESI_API_URL || "https://gorodaivesi.ru"
+    ).replace(/\/+$/, "");
+
+    let remote: {
+      user?: {
+        _id?: string;
+        email?: string;
+        fullname?: string;
+        fullinfo?: { phone?: string };
+      };
+    };
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const response = await fetch(`${baseUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: payload.email,
+          password: payload.password,
+        }),
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
+
+      if (!response.ok) {
+        throw new BadRequestException(
+          "Не удалось войти через «Города и Веси»: проверьте email и пароль.",
+        );
+      }
+      remote = (await response.json()) as typeof remote;
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        "Сервис «Города и Веси» временно недоступен. Попробуйте позже.",
+      );
+    }
+
+    const ext = remote.user;
+    if (!ext?._id || !ext.email) {
+      throw new BadRequestException(
+        "Некорректный ответ сервиса «Города и Веси».",
+      );
+    }
+
+    const user = await this.userService.upsertExternalUser({
+      provider: "gorodaivesi",
+      externalId: String(ext._id),
+      email: ext.email,
+      fullName: ext.fullname || ext.email,
+      phone: ext.fullinfo?.phone,
+    });
+
+    const tokens = this.tokenService.generateTokens({ _id: user._id.toString() });
+    await this.tokenService.saveToken(tokens.refreshToken);
+
+    const publicUser = await this.userService.getById(user._id.toString());
+    return { user: publicUser, ...tokens };
+  }
+
   async refresh(refreshToken?: string, accessToken?: string) {
     const accessData = this.tokenService.validateAccessToken(accessToken);
     if (accessData?._id) {

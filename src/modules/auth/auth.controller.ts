@@ -82,6 +82,22 @@ export class AuthController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post("gorodaivesi/login")
+  async gorodaivesiLogin(
+    @Body() payload: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const data = await this.authService.gorodaivesiLogin(payload);
+    this.setAuthCookies(
+      res,
+      data.accessToken,
+      data.refreshToken,
+      data.user?.roles || [],
+    );
+    return { user: data.user };
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Get("refresh")
   async refresh(
     @Req() req: Request,

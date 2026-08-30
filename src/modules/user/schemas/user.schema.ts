@@ -35,6 +35,14 @@ export class User {
     default: ["renter"],
   })
   roles: UserRole[];
+
+  /** Внешний провайдер входа (например, "gorodaivesi") — для SSO-маппинга. */
+  @Prop()
+  externalProvider?: string;
+
+  /** Идентификатор пользователя во внешней системе. */
+  @Prop({ index: true })
+  externalId?: string;
 }
 
 export type UserDocument = HydratedDocument<User>;

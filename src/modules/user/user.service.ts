@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
+import * as bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { User, UserDocument } from "./schemas/user.schema";
 
@@ -47,6 +49,57 @@ export class UserService {
       isRenterVerified: true,
       isBlocked: false,
       roles: isAdmin ? ["renter", "admin"] : ["renter"],
+    });
+  }
+
+  /**
+   * Находит или создаёт пользователя, вошедшего через внешний провайдер (SSO).
+   * Сопоставление: сначала по (provider, externalId), затем по email.
+   * Локальный пароль обязателен схемой — генерируем случайный (для внешнего входа не используется).
+   */
+  async upsertExternalUser(payload: {
+    provider: string;
+    externalId: string;
+    email: string;
+    fullName: string;
+    phone?: string;
+  }): Promise<UserDocument> {
+    const email = payload.email.toLowerCase().trim();
+
+    const adminEmails = (process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const isAdmin = adminEmails.includes(email);
+
+    let user =
+      (await this.userModel
+        .findOne({ externalProvider: payload.provider, externalId: payload.externalId })
+        .exec()) || (await this.getByEmail(email));
+
+    if (user) {
+      const update: Record<string, unknown> = {
+        externalProvider: payload.provider,
+        externalId: payload.externalId,
+      };
+      if (payload.fullName && !user.fullName) update.fullName = payload.fullName.trim();
+      if (payload.phone && !user.phone) update.phone = payload.phone.trim();
+      if (isAdmin) update.$addToSet = { roles: "admin" };
+      await this.userModel.updateOne({ _id: user._id }, update).exec();
+      return (await this.getById(user._id.toString())) as UserDocument;
+    }
+
+    const randomHash = await bcrypt.hash(randomBytes(24).toString("hex"), 4);
+    return this.userModel.create({
+      fullName: (payload.fullName || email).trim(),
+      email,
+      password: randomHash,
+      phone: (payload.phone || "").trim(),
+      isRenterVerified: true,
+      isBlocked: false,
+      roles: isAdmin ? ["renter", "admin"] : ["renter"],
+      externalProvider: payload.provider,
+      externalId: payload.externalId,
     });
   }
 
