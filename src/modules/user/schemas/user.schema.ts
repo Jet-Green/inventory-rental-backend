@@ -14,7 +14,7 @@ export class User {
   @Prop({ required: true, select: false })
   password: string;
 
-  @Prop({ required: true })
+  @Prop({ default: "" })
   phone: string;
 
   @Prop()
@@ -47,3 +47,5 @@ export class User {
 
 export type UserDocument = HydratedDocument<User>;
 export const UserSchema = SchemaFactory.createForClass(User);
+
+UserSchema.index({ externalProvider: 1, externalId: 1 }, { unique: true, partialFilterExpression: { externalProvider: { $type: "string" }, externalId: { $type: "string" } } });

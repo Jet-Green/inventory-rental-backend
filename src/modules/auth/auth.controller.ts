@@ -1,5 +1,6 @@
 import {
   Body,
+  UnauthorizedException,
   Controller,
   Get,
   HttpCode,
@@ -9,6 +10,8 @@ import {
   Res,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { randomBytes, timingSafeEqual } from "crypto";
+import { HandoffStartDto, HandoffCompleteDto } from "./dto/handoff.dto";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegistrationDto } from "./dto/registration.dto";
@@ -47,6 +50,34 @@ export class AuthController {
       domain,
       sameSite: "lax",
     });
+  }
+
+  private handoffCookieOptions() {
+    return { httpOnly: true, secure: process.env.HTTPS === "true", sameSite: "lax" as const,
+      path: "/api/auth/gorodaivesi" };
+  }
+
+  @Post("gorodaivesi/start")
+  startHandoff(@Body() payload: HandoffStartDto, @Res({ passthrough: true }) res: Response) {
+    const state = randomBytes(32).toString("hex");
+    res.cookie("rentalHandoff", state, { ...this.handoffCookieOptions(), maxAge: 5 * 60 * 1000 });
+    res.setHeader("Cache-Control", "no-store");
+    const query = new URLSearchParams({ state, listingId: payload.listingId });
+    return { url: `https://gorodaivesi.ru/rental/auth?${query}` };
+  }
+
+  @Post("gorodaivesi/complete")
+  async completeHandoff(@Body() payload: HandoffCompleteDto, @Req() req: Request,
+    @Res({ passthrough: true }) res: Response) {
+    const expected = req.cookies?.rentalHandoff;
+    if (typeof expected !== "string" || !/^[a-f0-9]{64}$/.test(expected) ||
+      !timingSafeEqual(Buffer.from(expected), Buffer.from(payload.state)))
+      throw new UnauthorizedException("Переход открыт в другом браузере или истёк");
+    res.clearCookie("rentalHandoff", this.handoffCookieOptions());
+    res.setHeader("Cache-Control", "no-store");
+    const data = await this.authService.completeHandoff(payload.code, payload.state);
+    this.setAuthCookies(res, data.accessToken, data.refreshToken, data.user?.roles || []);
+    return { user: data.user, path: `/rental-item/${data.listingId}` };
   }
 
   @HttpCode(HttpStatus.CREATED)
