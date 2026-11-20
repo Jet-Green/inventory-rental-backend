@@ -1,6 +1,7 @@
 import { Body, Controller, Post, Req, Res } from '@nestjs/common';
 import { IsEmail, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import type { Request, Response } from 'express';
+import { AuthCookiesService } from './auth-cookies.service';
 import { FederationService } from './federation.service';
 class StartDto { @IsOptional() @IsString() @MaxLength(2048) returnPath?: string; }
 class StateDto { @Matches(/^[a-f0-9]{64}$/) state: string; }
@@ -9,15 +10,11 @@ class ConfirmDto { @Matches(/^[a-f0-9]{64}$/) receipt: string; @Matches(/^[a-f0-
 class LinkDto extends StateDto { @IsEmail() email: string; @IsString() @MaxLength(256) password: string; }
 @Controller('auth/federation')
 export class FederationController {
-  constructor(private federation: FederationService) {}
+  constructor(private federation: FederationService, private authCookies: AuthCookiesService) {}
   private options() { return { httpOnly: true, secure: process.env.HTTPS === 'true', sameSite: 'lax' as const, path: '/api/auth/federation' }; }
   private result(res: Response, data: any) {
-    // Host-only cookies: never share GiV's native browser credentials.
-    const options = { httpOnly: true, secure: process.env.HTTPS === 'true', sameSite: 'lax' as const, path: '/' };
     res.clearCookie('rentalFederation', this.options());
-    res.cookie('refreshToken', data.refreshToken, { ...options, maxAge: 30 * 86400000 });
-    res.cookie('token', data.accessToken, { ...options, maxAge: 7 * 86400000 });
-    res.cookie('roles', JSON.stringify(data.user.roles || []), { ...options, httpOnly: false, maxAge: 7 * 86400000 });
+    this.authCookies.write(res, data.accessToken, data.refreshToken, data.user.roles || []);
     return { user: data.user, path: data.path };
   }
   @Post('start') async start(@Body() data: StartDto, @Res({ passthrough: true }) res: Response) {

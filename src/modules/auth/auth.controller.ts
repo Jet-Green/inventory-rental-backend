@@ -12,13 +12,14 @@ import {
 import type { Request, Response } from "express";
 import { randomBytes, timingSafeEqual } from "crypto";
 import { HandoffStartDto, HandoffCompleteDto } from "./dto/handoff.dto";
+import { AuthCookiesService } from './auth-cookies.service';
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegistrationDto } from "./dto/registration.dto";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, private readonly authCookies: AuthCookiesService) {}
 
   private setAuthCookies(
     res: Response,
@@ -26,32 +27,7 @@ export class AuthController {
     refreshToken: string,
     roles: string[],
   ): void {
-    const secure = process.env.HTTPS === "true";
-    // Native credentials are restricted to this API host, including when the
-    // two frontends share a parent domain.
-    const domain = undefined;
-
-    res.cookie("refreshToken", refreshToken, {
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      secure,
-      domain,
-      sameSite: "lax",
-    });
-    res.cookie("token", accessToken, {
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      secure,
-      domain,
-      sameSite: "lax",
-    });
-    res.cookie("roles", JSON.stringify(roles), {
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      httpOnly: false,
-      secure,
-      domain,
-      sameSite: "lax",
-    });
+    this.authCookies.write(res, accessToken, refreshToken, roles);
   }
 
   private handoffCookieOptions() {
@@ -153,8 +129,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post("logout")
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.authService.logout(req.cookies?.refreshToken);
-    res.clearCookie("refreshToken").clearCookie("token").clearCookie("roles");
+    await Promise.all(this.authCookies.refreshTokens(req).map(token => this.authService.logout(token)));
+    this.authCookies.clear(res);
     return { ok: true };
   }
 
