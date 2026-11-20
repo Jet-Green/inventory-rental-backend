@@ -34,7 +34,7 @@ export class AuthService {
 
   async login(payload: LoginDto) {
     const user = await this.userService.getByEmailWithPassword(payload.email);
-    if (!user) {
+    if (!user || user.federationOnly || user.isBlocked) {
       throw new BadRequestException("Пользователь с таким email не найден");
     }
 
@@ -119,6 +119,26 @@ export class AuthService {
 
     const publicUser = await this.userService.getById(user._id.toString());
     return { user: publicUser, ...tokens };
+  }
+
+  async completeHandoff(code: string, state: string) {
+    const secret = process.env.RENTAL_HANDOFF_SECRET;
+    if (!secret || secret.length < 32) throw new BadRequestException("Переход временно недоступен");
+    // Fixed authority; no user-controlled hosts and no redirects with credentials.
+    const response = await fetch("https://gorodaivesi.ru/auth/rental-handoff/exchange", {
+      method: "POST", redirect: "error", signal: AbortSignal.timeout(10000),
+      headers: { "Content-Type": "application/json", "X-Rental-Handoff-Secret": secret },
+      body: JSON.stringify({ code, state }),
+    });
+    if (!response.ok) throw new UnauthorizedException("Переход истёк. Начните заново из карточки объекта.");
+    const remote = await response.json() as { listingId: string; user: { _id: string; email: string; fullName?: string; phone?: string } };
+    if (!/^[a-f0-9]{24}$/.test(remote.listingId) || !/^[a-f0-9]{24}$/.test(remote.user?._id) || typeof remote.user.email !== "string")
+      throw new UnauthorizedException("Некорректный ответ сервиса");
+    const user = await this.userService.upsertExternalUser({ provider: "gorodaivesi", externalId: remote.user._id,
+      email: remote.user.email, fullName: remote.user.fullName || remote.user.email, phone: remote.user.phone });
+    const tokens = this.tokenService.generateTokens({ _id: user._id.toString() });
+    await this.tokenService.saveToken(tokens.refreshToken);
+    return { ...tokens, user: await this.userService.getById(user._id.toString()), listingId: remote.listingId };
   }
 
   async refresh(refreshToken?: string, accessToken?: string) {
