@@ -32,7 +32,11 @@ export class FederationService {
     });
   }
   async invoke(operation: string, ...args: any[]) {
-    try { return await (this.core as any)[operation](...args); }
+    try {
+      // Await Mongo uniqueness constraints before a first-request race can write.
+      await Promise.all([this.core.Flow.init(), this.core.Link.init()]);
+      return await (this.core as any)[operation](...args);
+    }
     catch (error: any) {
       if (error instanceof HttpException) throw error;
       if (error.status) throw new HttpException({ message: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
