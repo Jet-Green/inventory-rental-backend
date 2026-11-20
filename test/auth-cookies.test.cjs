@@ -4,7 +4,7 @@ const { AuthCookiesService, rentalCookieDomain } = require('../dist/modules/auth
 const { AuthController } = require('../dist/modules/auth/auth.controller');
 const { FederationController } = require('../dist/modules/auth/federation.controller');
 function response() {
-  return { events: [], cookie(name, value, options) { this.events.push({ action: 'write', name, value, options }); return this; }, clearCookie(name, options) { this.events.push({ action: 'clear', name, options }); return this; }, setHeader() {} };
+  return { req: { hostname: 'api.rent.gorodaivesi.ru' }, events: [], cookie(name, value, options) { this.events.push({ action: 'write', name, value, options }); return this; }, clearCookie(name, options) { this.events.push({ action: 'clear', name, options }); return this; }, setHeader() {} };
 }
 function withDomain(domain, run) {
   const prior = process.env.DOMAIN;
@@ -21,13 +21,15 @@ function checkMigration(res, expectedDomain) {
     assert.equal(final.options.domain, expectedDomain);
     assert.equal(final.options.path, '/');
     const clears = res.events.filter(e => e.name === name && e.action === 'clear');
-    assert.ok(clears.some(e => e.options.domain === undefined), 'old host-only cookie removed');
-    assert.ok(clears.some(e => e.options.domain === 'rent.gorodaivesi.ru'), 'old Rental domain cookie removed');
+    if (expectedDomain !== undefined) assert.ok(clears.some(e => e.options.domain === undefined), 'competing host-only cookie removed');
+    if (expectedDomain !== 'rent.gorodaivesi.ru') assert.ok(clears.some(e => e.options.domain === 'rent.gorodaivesi.ru'), 'competing Rental domain cookie removed');
+    assert.ok(clears.every(e => e.options.domain !== expectedDomain), 'intended cookie overwritten directly');
     assert.ok(res.events.indexOf(final) > Math.max(...clears.map(e => res.events.indexOf(e))), 'canonical cookie written last');
   }
   for (const e of res.events) {
     assert.notEqual(e.options.domain, 'gorodaivesi.ru');
     assert.notEqual(e.options.domain, '.gorodaivesi.ru');
+    assert.ok(!e.options.domain?.includes('firetechno'), 'unrelated Rental domain untouched');
   }
 }
 test('safe Rental domain permits SSR and rejects any scope that reaches GiV', () => {
@@ -61,5 +63,13 @@ test('logout revokes duplicate refresh cookies and clears all valid legacy scope
       assert.ok(res.events.some(e => e.name === name && e.options.domain === 'rent.gorodaivesi.ru'));
     }
     assert.ok(res.events.every(e => e.options.domain !== 'gorodaivesi.ru'));
+  });
+});
+
+test('a Rental host never clears the other Rental environment domain', async () => {
+  await withDomain('rent.firetechno.ru', async cookies => {
+    const res = response();
+    assert.throws(() => cookies.write(res, 'a', 'r', []));
+    assert.equal(res.events.length, 0);
   });
 });

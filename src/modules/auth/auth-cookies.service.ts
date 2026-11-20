@@ -19,14 +19,24 @@ export class AuthCookiesService {
     return { httpOnly, secure: process.env.HTTPS === 'true', sameSite: 'lax', path: '/', domain };
   }
 
-  clear(res: Response): void {
-    // Delete both scopes before choosing the final scope. Without this migration,
-    // cookie-parser can select an older same-name session in the browser header.
-    const scopes = new Set<string | undefined>([undefined, this.domain]);
-    for (const root of RENTAL_ROOTS) {
-      scopes.add(root);
-      scopes.add(`api.${root}`);
+  private scopes(res: Response): (string | undefined)[] {
+    const hostname = res.req?.hostname?.toLowerCase().replace(/\.$/, '');
+    const hostRoot = RENTAL_ROOTS.find(value => hostname === value || hostname?.endsWith(`.${value}`));
+    if (hostRoot && this.domain && this.domain !== hostRoot && this.domain !== `api.${hostRoot}`) {
+      throw new Error("DOMAIN не соответствует текущему поддомену Аренды");
     }
+    const root = hostRoot || RENTAL_ROOTS.find(value => this.domain === value || this.domain === `api.${value}`);
+    const scopes = new Set<string | undefined>([undefined]);
+    if (root) {
+      scopes.add(root);
+      // Domain=<API host> differs from a host-only cookie in browsers.
+      scopes.add(hostname && (hostname === root || hostname.endsWith(`.${root}`)) ? hostname : `api.${root}`);
+    }
+    if (this.domain) scopes.add(this.domain);
+    return [...scopes];
+  }
+
+  private clearScopes(res: Response, scopes: (string | undefined)[]): void {
     for (const domain of scopes) {
       for (const name of ['refreshToken', 'token', 'roles']) {
         res.clearCookie(name, this.options(domain, name !== 'roles'));
@@ -34,8 +44,13 @@ export class AuthCookiesService {
     }
   }
 
+  clear(res: Response): void {
+    this.clearScopes(res, this.scopes(res));
+  }
+
   write(res: Response, accessToken: string, refreshToken: string, roles: string[]): void {
-    this.clear(res);
+    // Remove competing legacy scopes. The intended scope is overwritten directly.
+    this.clearScopes(res, this.scopes(res).filter(domain => domain !== this.domain));
     res.cookie('refreshToken', refreshToken, { ...this.options(this.domain), maxAge: 30 * 86400000 });
     res.cookie('token', accessToken, { ...this.options(this.domain), maxAge: 7 * 86400000 });
     res.cookie('roles', JSON.stringify(roles), { ...this.options(this.domain, false), maxAge: 7 * 86400000 });
