@@ -129,6 +129,7 @@ export class RentalListingService {
         status: { $in: ["pending", "confirmed", "active"] },
       })
       .select({ listingId: 1, dateFrom: 1, dateTo: 1, units: 1 })
+      .setOptions({ autopopulate: false })
       .exec();
 
     // Группируем брони по листингу.

@@ -7,7 +7,7 @@ const doc = (id, units=5) => ({_id:{toString:()=>id},moderationStatus:'active',u
 function harness(rows, bookings=[]) {
   let captured;
   const model={find(q){captured=q;const chain={skip(){return chain},limit(){return chain},sort(){return chain},exec:async()=>rows};return chain},countDocuments:async()=>rows.length};
-  const booking={find(q){assert.deepEqual(q.status.$in,['pending','confirmed','active']);return {select(){return {exec:async()=>bookings}}}}};
+  const booking={find(q){assert.deepEqual(q.status.$in,['pending','confirmed','active']);return {select(){return {setOptions(options){assert.equal(options.autopopulate,false);return {exec:async()=>bookings}}}}}}};
   return {service:new RentalListingService(model,booking),query:()=>captured};
 }
 test('strict date, price, quantity and enum validation',()=>{
