@@ -27,7 +27,9 @@ export class AuthController {
     roles: string[],
   ): void {
     const secure = process.env.HTTPS === "true";
-    const domain = process.env.DOMAIN || undefined;
+    // Native credentials are restricted to this API host, including when the
+    // two frontends share a parent domain.
+    const domain = undefined;
 
     res.cookie("refreshToken", refreshToken, {
       maxAge: 30 * 24 * 60 * 60 * 1000,

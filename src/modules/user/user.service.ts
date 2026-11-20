@@ -66,7 +66,10 @@ export class UserService {
   }): Promise<UserDocument> {
     const email = payload.email.toLowerCase().trim();
 
-    const user = await this.userModel.findOne({ externalProvider: payload.provider, externalId: payload.externalId }).exec();
+    const links = this.userModel.db?.models?.FederationLink;
+    const trusted = links ? await links.findOne({ remoteId: payload.externalId }).lean() : null;
+    const user = trusted ? await this.getById(trusted.localId) : await this.userModel.findOne({ externalProvider: payload.provider, externalId: payload.externalId }).exec();
+    if (user && !trusted && !user.federationOnly) throw new ConflictException("Для безопасной привязки начните новый вход через Города и Веси.");
     if (user) {
       if (user.isBlocked) throw new UnauthorizedException("Аккаунт заблокирован");
       return user;
@@ -87,6 +90,7 @@ export class UserService {
       isRenterVerified: true,
       isBlocked: false,
       roles: ["renter"],
+      federationOnly: true,
       externalProvider: payload.provider,
       externalId: payload.externalId,
       });
@@ -94,8 +98,26 @@ export class UserService {
       if ((error as { code?: number }).code !== 11000) throw error;
       // Concurrent callbacks may race to create the same provider identity.
       const winner = await this.userModel.findOne({ externalProvider: payload.provider, externalId: payload.externalId }).exec();
-      if (winner && !winner.isBlocked) return winner;
+      if (winner?.federationOnly && !winner.isBlocked) return winner;
       throw new ConflictException("Не удалось связать аккаунт. Войдите в существующий аккаунт Аренды.");
+    }
+  }
+
+  async findFederationMirror(remoteId: string) {
+    return this.userModel.findOne({ federationOnly: true, externalProvider: "gorodaivesi", externalId: remoteId }).exec();
+  }
+
+  async createFederationMirror(remote: { _id: string; email: string; fullName?: string }): Promise<UserDocument> {
+    try {
+      return await this.userModel.create({ email: remote.email.toLowerCase().trim(),
+        fullName: remote.fullName || remote.email, password: await bcrypt.hash(randomBytes(32).toString("hex"), 10),
+        phone: "", isRenterVerified: true, isBlocked: false, roles: ["renter"],
+        federationOnly: true, externalProvider: "gorodaivesi", externalId: remote._id });
+    } catch (error) {
+      if ((error as any).code !== 11000) throw error;
+      const winner = await this.userModel.findOne({ federationOnly: true, externalProvider: "gorodaivesi", externalId: remote._id }).exec();
+      if (winner) return winner;
+      throw new ConflictException({ message: "Войдите в существующий аккаунт этого сайта, чтобы связать его.", code: "ACCOUNT_LINK_REQUIRED" });
     }
   }
 

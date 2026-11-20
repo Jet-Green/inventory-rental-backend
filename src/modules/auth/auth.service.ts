@@ -34,7 +34,7 @@ export class AuthService {
 
   async login(payload: LoginDto) {
     const user = await this.userService.getByEmailWithPassword(payload.email);
-    if (!user) {
+    if (!user || user.federationOnly || user.isBlocked) {
       throw new BadRequestException("Пользователь с таким email не найден");
     }
 

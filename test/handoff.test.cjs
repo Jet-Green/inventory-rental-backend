@@ -18,9 +18,9 @@ test('new external identity receives renter only, even when ADMIN_EMAILS matches
   finally { if (previous === undefined) delete process.env.ADMIN_EMAILS; else process.env.ADMIN_EMAILS = previous; }
 });
 test('stable linked identity preserves local roles and rejects blocked account', async () => {
-  const existing = { roles: ['renter', 'business'], email: 'old@example.test' };
+  const existing = { federationOnly: true, roles: ['renter', 'business'], email: 'old@example.test' };
   assert.equal(await new UserService(model({ existing })).upsertExternalUser(payload), existing);
-  await assert.rejects(new UserService(model({ existing: { isBlocked: true } })).upsertExternalUser(payload), /заблокирован/);
+  await assert.rejects(new UserService(model({ existing: { federationOnly: true, isBlocked: true } })).upsertExternalUser(payload), /заблокирован/);
 });
 test('callback without original browser state never calls code exchange', async () => {
   let called = false;
@@ -37,7 +37,11 @@ test('uncertain exchange is attempted once, never automatically retried', async 
 });
 test('concurrent external signup returns only winner with same provider identity', async () => {
   let reads = 0;
-  const winner = { _id: 'winner', roles: ['renter'] };
+  const winner = { federationOnly: true, _id: 'winner', roles: ['renter'] };
   const m = { findOne(query) { return { exec: async () => query.externalId && ++reads > 1 ? winner : null }; }, async create() { throw Object.assign(Error('duplicate'), { code: 11000 }); } };
   assert.equal(await new UserService(m).upsertExternalUser(payload), winner);
+});
+
+test('legacy externalId inherited from email auto-link is not ownership proof', async () => {
+  await assert.rejects(new UserService(model({ existing: { _id: 'legacy-native', roles: ['admin'] } })).upsertExternalUser(payload), /безопасной привязки/);
 });

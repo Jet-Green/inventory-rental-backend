@@ -5,6 +5,8 @@ export type UserRole = "renter" | "business" | "admin";
 
 @Schema({ timestamps: true, collection: "users" })
 export class User {
+  @Prop({ default: false })
+  federationOnly: boolean;
   @Prop({ required: true })
   fullName: string;
 
