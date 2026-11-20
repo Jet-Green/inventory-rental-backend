@@ -37,9 +37,9 @@ export class RentalListingService {
 
     if (!filters) return query;
     if (filters.categories?.length) query.categories = { $in: filters.categories };
-    if (filters.pickupType) query.pickupType = filters.pickupType;
+    if (filters.pickupType) query.pickupType = filters.pickupType === "both" ? "both" : { $in: [filters.pickupType, "both"] };
     if (typeof filters.unitsNeeded === "number") {
-      query.unitsAvailable = { $gte: filters.unitsNeeded };
+      query[this.isValidRange(filters.dateFrom, filters.dateTo) ? "unitsTotal" : "unitsAvailable"] = { $gte: filters.unitsNeeded };
     }
     if (typeof filters.priceFrom === "number" || typeof filters.priceTo === "number") {
       query.pricePerDay = {};
@@ -48,8 +48,8 @@ export class RentalListingService {
     }
     if (filters.search) {
       query.$or = [
-        { title: { $regex: filters.search, $options: "i" } },
-        { description: { $regex: filters.search, $options: "i" } },
+        { title: { $regex: filters.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { description: { $regex: filters.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
       ];
     }
 
@@ -154,7 +154,9 @@ export class RentalListingService {
         rangeToTs,
       );
       const free = Math.max(0, listing.unitsTotal - reserved);
-      return free >= unitsNeeded;
+      if (free < unitsNeeded) return false;
+      listing.unitsAvailable = free;
+      return true;
     });
   }
 
