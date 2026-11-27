@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import * as bcrypt from "bcryptjs";
@@ -54,7 +54,7 @@ export class UserService {
 
   /**
    * Находит или создаёт пользователя, вошедшего через внешний провайдер (SSO).
-   * Сопоставление: сначала по (provider, externalId), затем по email.
+   * Сопоставление только по (provider, externalId); совпадение email не даёт права на привязку.
    * Локальный пароль обязателен схемой — генерируем случайный (для внешнего входа не используется).
    */
   async upsertExternalUser(payload: {
@@ -66,41 +66,59 @@ export class UserService {
   }): Promise<UserDocument> {
     const email = payload.email.toLowerCase().trim();
 
-    const adminEmails = (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
-    const isAdmin = adminEmails.includes(email);
-
-    let user =
-      (await this.userModel
-        .findOne({ externalProvider: payload.provider, externalId: payload.externalId })
-        .exec()) || (await this.getByEmail(email));
-
+    const links = this.userModel.db?.models?.FederationLink;
+    const trusted = links ? await links.findOne({ remoteId: payload.externalId }).lean() : null;
+    const user = trusted ? await this.getById(trusted.localId) : await this.userModel.findOne({ externalProvider: payload.provider, externalId: payload.externalId }).exec();
+    if (user && !trusted && !user.federationOnly) throw new ConflictException("Для безопасной привязки начните новый вход через Города и Веси.");
     if (user) {
-      const update: Record<string, unknown> = {
-        externalProvider: payload.provider,
-        externalId: payload.externalId,
-      };
-      if (payload.fullName && !user.fullName) update.fullName = payload.fullName.trim();
-      if (payload.phone && !user.phone) update.phone = payload.phone.trim();
-      if (isAdmin) update.$addToSet = { roles: "admin" };
-      await this.userModel.updateOne({ _id: user._id }, update).exec();
-      return (await this.getById(user._id.toString())) as UserDocument;
+      if (user.isBlocked) throw new UnauthorizedException("Аккаунт заблокирован");
+      return user;
+    }
+    // Email is not an identity proof. Existing local accounts require a separate,
+    // authenticated linking flow; SSO must never assign roles from ADMIN_EMAILS.
+    if (await this.getByEmail(email)) {
+      throw new ConflictException("Почта уже используется в Аренде. Войдите в существующий аккаунт Аренды.");
     }
 
     const randomHash = await bcrypt.hash(randomBytes(24).toString("hex"), 4);
-    return this.userModel.create({
+    try {
+      return await this.userModel.create({
       fullName: (payload.fullName || email).trim(),
       email,
       password: randomHash,
       phone: (payload.phone || "").trim(),
       isRenterVerified: true,
       isBlocked: false,
-      roles: isAdmin ? ["renter", "admin"] : ["renter"],
+      roles: ["renter"],
+      federationOnly: true,
       externalProvider: payload.provider,
       externalId: payload.externalId,
-    });
+      });
+    } catch (error) {
+      if ((error as { code?: number }).code !== 11000) throw error;
+      // Concurrent callbacks may race to create the same provider identity.
+      const winner = await this.userModel.findOne({ externalProvider: payload.provider, externalId: payload.externalId }).exec();
+      if (winner?.federationOnly && !winner.isBlocked) return winner;
+      throw new ConflictException("Не удалось связать аккаунт. Войдите в существующий аккаунт Аренды.");
+    }
+  }
+
+  async findFederationMirror(remoteId: string) {
+    return this.userModel.findOne({ federationOnly: true, externalProvider: "gorodaivesi", externalId: remoteId }).exec();
+  }
+
+  async createFederationMirror(remote: { _id: string; email: string; fullName?: string }): Promise<UserDocument> {
+    try {
+      return await this.userModel.create({ email: remote.email.toLowerCase().trim(),
+        fullName: remote.fullName || remote.email, password: await bcrypt.hash(randomBytes(32).toString("hex"), 10),
+        phone: "", isRenterVerified: true, isBlocked: false, roles: ["renter"],
+        federationOnly: true, externalProvider: "gorodaivesi", externalId: remote._id });
+    } catch (error) {
+      if ((error as any).code !== 11000) throw error;
+      const winner = await this.userModel.findOne({ federationOnly: true, externalProvider: "gorodaivesi", externalId: remote._id }).exec();
+      if (winner) return winner;
+      throw new ConflictException({ message: "Войдите в существующий аккаунт этого сайта, чтобы связать его.", code: "ACCOUNT_LINK_REQUIRED" });
+    }
   }
 
   async updateProfileById(userId: string, payload: UpdateProfileDto): Promise<UserDocument> {

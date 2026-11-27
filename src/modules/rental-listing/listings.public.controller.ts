@@ -1,4 +1,6 @@
 import { Controller, Get, NotFoundException, Param, Query } from "@nestjs/common";
+import { Types } from "mongoose";
+import { validatePublicCatalogQuery } from "./public-catalog-query";
 import { RentalListingService } from "./rental-listing.service";
 
 type ListingCardDto = {
@@ -46,7 +48,10 @@ export class ListingsPublicController {
     @Query("pickupMethod") pickupMethod?: "self_pickup" | "delivery",
     @Query("unitsNeeded") unitsNeeded?: string,
     @Query("sortBy") sortBy?: "priceAsc" | "priceDesc",
+    @Query("dateFrom") dateFrom?: string,
+    @Query("dateTo") dateTo?: string,
   ) {
+    validatePublicCatalogQuery({ page, limit, search, categorySlugs, priceFrom, priceTo, pickupMethod, unitsNeeded, sortBy, dateFrom, dateTo });
     const categories =
       categorySlugs === undefined
         ? undefined
@@ -71,6 +76,8 @@ export class ListingsPublicController {
         pickupType,
         unitsNeeded: unitsNeeded ? Number(unitsNeeded) : undefined,
         sortBy,
+        dateFrom,
+        dateTo,
       },
     });
 
@@ -99,8 +106,9 @@ export class ListingsPublicController {
 
   @Get(":id")
   async getById(@Param("id") id: string) {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException("Объявление не найдено");
     const doc = await this.rentalListingService.getById(id);
-    if (!doc) throw new NotFoundException("Объявление не найдено");
+    if (!doc || doc.moderationStatus !== "active") throw new NotFoundException("Объявление не найдено");
 
     const listing: ListingCardDto = {
       id: doc._id.toString(),

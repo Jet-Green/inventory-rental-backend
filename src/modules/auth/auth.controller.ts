@@ -1,5 +1,6 @@
 import {
   Body,
+  UnauthorizedException,
   Controller,
   Get,
   HttpCode,
@@ -9,13 +10,16 @@ import {
   Res,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { randomBytes, timingSafeEqual } from "crypto";
+import { HandoffStartDto, HandoffCompleteDto } from "./dto/handoff.dto";
+import { AuthCookiesService } from './auth-cookies.service';
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegistrationDto } from "./dto/registration.dto";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, private readonly authCookies: AuthCookiesService) {}
 
   private setAuthCookies(
     res: Response,
@@ -23,30 +27,35 @@ export class AuthController {
     refreshToken: string,
     roles: string[],
   ): void {
-    const secure = process.env.HTTPS === "true";
-    const domain = process.env.DOMAIN || undefined;
+    this.authCookies.write(res, accessToken, refreshToken, roles);
+  }
 
-    res.cookie("refreshToken", refreshToken, {
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      secure,
-      domain,
-      sameSite: "lax",
-    });
-    res.cookie("token", accessToken, {
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      secure,
-      domain,
-      sameSite: "lax",
-    });
-    res.cookie("roles", JSON.stringify(roles), {
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      httpOnly: false,
-      secure,
-      domain,
-      sameSite: "lax",
-    });
+  private handoffCookieOptions() {
+    return { httpOnly: true, secure: process.env.HTTPS === "true", sameSite: "lax" as const,
+      path: "/api/auth/gorodaivesi" };
+  }
+
+  @Post("gorodaivesi/start")
+  startHandoff(@Body() payload: HandoffStartDto, @Res({ passthrough: true }) res: Response) {
+    const state = randomBytes(32).toString("hex");
+    res.cookie("rentalHandoff", state, { ...this.handoffCookieOptions(), maxAge: 5 * 60 * 1000 });
+    res.setHeader("Cache-Control", "no-store");
+    const query = new URLSearchParams({ state, listingId: payload.listingId });
+    return { url: `https://gorodaivesi.ru/rental/auth?${query}` };
+  }
+
+  @Post("gorodaivesi/complete")
+  async completeHandoff(@Body() payload: HandoffCompleteDto, @Req() req: Request,
+    @Res({ passthrough: true }) res: Response) {
+    const expected = req.cookies?.rentalHandoff;
+    if (typeof expected !== "string" || !/^[a-f0-9]{64}$/.test(expected) ||
+      !timingSafeEqual(Buffer.from(expected), Buffer.from(payload.state)))
+      throw new UnauthorizedException("Переход открыт в другом браузере или истёк");
+    res.clearCookie("rentalHandoff", this.handoffCookieOptions());
+    res.setHeader("Cache-Control", "no-store");
+    const data = await this.authService.completeHandoff(payload.code, payload.state);
+    this.setAuthCookies(res, data.accessToken, data.refreshToken, data.user?.roles || []);
+    return { user: data.user, path: `/rental-item/${data.listingId}` };
   }
 
   @HttpCode(HttpStatus.CREATED)
@@ -120,8 +129,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post("logout")
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.authService.logout(req.cookies?.refreshToken);
-    res.clearCookie("refreshToken").clearCookie("token").clearCookie("roles");
+    await Promise.all(this.authCookies.refreshTokens(req).map(token => this.authService.logout(token)));
+    this.authCookies.clear(res);
     return { ok: true };
   }
 
